@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito&family=Raleway:ital@0;1&family=Rubik&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/cpval.jpg') }}">
+    <script src="{{ url_for('static', filename='js/map.js') }}"></script>
+    <script>
+          // Obtener la API key desde Flask
+          var mapApiKey = "{{ map_api_key }}";
+
+
+        // Agregar la API key al script de Google Maps
+          var googleMapsScript = document.createElement('script');
+          googleMapsScript.src = 'https://maps.googleapis.com/maps/api/js?key=' + mapApiKey + '&libraries=places&callback=initMap';
+          googleMapsScript.async = true;
+          googleMapsScript.defer = true;
+          document.head.appendChild(googleMapsScript);
+    </script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+
+    <title>Historial de tasaciones</title>
+</head>
+<body class="background">
+    <div class="navbar">
+        <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Logo de la empresa">
+        <a href="https://cpval.cl" class="portal-button">Inicio</a>
+        <a href="https://cpval.cl/propiedades/?refresh=on" class="portal-button">Propiedades</a> 
+        <a href="https://cpval.cl/corredores/" class="portal-button">Corredores</a> 
+        <a href="https://cpval.cl/encargo/" class="portal-button">Nosotros</a> 
+        <a href="https://www.cursoscpval.cl" class="portal-button" target="_blank">Cursos</a> 
+        <a href="https://cpval.cl/contacto/" class="portal-button">Contacto</a>
+        <a href="/" class="portal-button">Tasador</a>
+    </div>
+   
+    <div class="contenedor-de-contenido"> 
+        <div class="tarjeta-hist">
+            <form>
+                <h1>Historial de tasaciones</h1>
+                <div class="hist-form">
+                    <div class="filter-container-wrapper">
+                        <div class="filter-container" id="filter-container-1">
+                            <select id="tasaciones-filter-comuna" onchange="mostrarDetallesTasacionComuna(this.value)">
+                                <option value="">Comuna</option>
+                                {% for comuna in comunas %}
+                                    <option value="{{ comuna.comuna }}">{{ comuna.comuna }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="filter-container" id="filter-container-2">
+                            <select id="tasaciones-filter-direccion">
+                                <option value="">Seleccione una Tasación</option>
+                                {% for tasacion in tasaciones %}
+                                    <option value="{{ tasacion.direccion }}">{{ tasacion.direccion }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>                
+                </div>
+                <!-- Aquí se mostrarán los detalles completos de la tasación directamente en la tarjeta -->
+                <div id="detalles-tasacion-tarjeta">
+                    <!-- Los detalles de la tasación se mostrarán aquí -->
+                </div>
+            </form>
+            
+        </div>
+        <div class="tarjeta-formulario-hist">
+            <div class="tarjeta-mapa-hist">
+                <div class="map-hist" id="map-hist"></div>
+            </div>
+            <div id="detalles-tasacion">
+                <!-- Aquí se mostrarán los detalles de la tasación, como las coordenadas -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const mapDiv = document.getElementById("map-hist");
+        const chileCoords = {lat: -26.703418148692126, lng: -70.27302958914181};
+        let map;
+        let marker;
+
+        function initMap() {
+            map = new google.maps.Map(mapDiv, {
+                center: chileCoords,
+                zoom: 6,
+            });
+            marker = new google.maps.Marker({
+                position: chileCoords,
+                map: map,
+            });
+        }
+
+        function mostrarDetallesTasacionComuna(comuna) {
+            $.ajax({
+                url: '/obtener_direcciones_por_comuna',
+                type: 'POST',
+                data: { comuna: comuna },
+                success: function (data) {
+                    const tasacionesFilterDireccion = document.getElementById("tasaciones-filter-direccion");
+                    tasacionesFilterDireccion.innerHTML = '<option value="">Seleccione una Tasación</option>';
+                    for (const direccion of data.direcciones) {
+                        const option = document.createElement("option");
+                        option.value = direccion.direccion;
+                        option.textContent = direccion.direccion;
+                        tasacionesFilterDireccion.appendChild(option);
+                    }
+                }
+            });
+        }
+
+        function actualizarMapa(latitud, longitud) {
+            map.setCenter({ lat: latitud, lng: longitud });
+            marker.setPosition({ lat: latitud, lng: longitud });
+            map.setZoom(15);
+        }
+
+        function mostrarDetallesTasacion(direccion) {
+        $.ajax({
+            url: '/detalles_tasacion',
+            type: 'POST',
+            data: { direccion: direccion },
+            success: function (data) {
+                const detallesTasacion = data.detalles[0];
+
+                // Construir el contenido HTML con los detalles completos de la tasación
+                var detallesHtml = "<h2>" + detallesTasacion.direccion + "</h2>";
+                detallesHtml += "<p>Comuna: " + detallesTasacion.comuna + "</p>";
+                detallesHtml += "<p>Región: " + detallesTasacion.region + "</p>";
+                detallesHtml += "<p>Área Total: " + detallesTasacion.area_total + " m²</p>";
+                detallesHtml += "<p>Área Construida: " + detallesTasacion.area_construida + " m²</p>";
+                detallesHtml += "<p>Condición: " + detallesTasacion.condicion + "</p>";
+                detallesHtml += "<p>Estacionamientos: " + detallesTasacion.estacionamientos + "</p>";
+                detallesHtml += "<p>Baños: " + detallesTasacion.baños + "</p>";
+                detallesHtml += "<p>Operación: " + detallesTasacion.operacion + "</p>";
+                detallesHtml += "<p>Dormitorio: " + detallesTasacion.dormitorio + "</p>";
+                detallesHtml += "<p>Tipo de Propiedad: " + detallesTasacion.tipo_propiedad + "</p>";
+                detallesHtml += "<p>Fecha de Ingreso: " + detallesTasacion.fecha_ingreso + "</p>";
+                detallesHtml += "<p>Latitud: " + detallesTasacion.latitud + "</p>";
+                detallesHtml += "<p>Longitud: " + detallesTasacion.longitud + "</p>";
+                detallesHtml += "<p>Valor Predicho: " + detallesTasacion.valor_predicho + "</p>";
+
+                // Mostrar los detalles en la tarjeta
+                document.getElementById("detalles-tasacion-tarjeta").innerHTML = detallesHtml;
+
+                // Actualizar el mapa con las coordenadas
+                actualizarMapa(parseFloat(detallesTasacion.latitud), parseFloat(detallesTasacion.longitud));
+            }
+        });
+    }
+
+            // Agregar el siguiente código para manejar los cambios en los selectores
+        document.getElementById("tasaciones-filter-direccion").addEventListener("change", function () {
+            const selectedDireccion = this.value;
+            if (selectedDireccion) {
+                mostrarDetallesTasacion(selectedDireccion);
+            }
+        });
+
+        document.getElementById("tasaciones-filter-comuna").addEventListener("change", function () {
+            const selectedComuna = this.value;
+            if (selectedComuna) {
+                mostrarDetallesTasacionComuna(selectedComuna);
+            }
+        });
+    </script>
+    <!-- Otros scripts que puedas tener... -->
+</body>
+</html>
+
+   
+</script>
